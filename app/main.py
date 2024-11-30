@@ -1,10 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import base64
-# from io import BytesIO
-# from PIL import Image
-# import torch
-# from .model import load_model, process_image
 import numpy as np
 import cv2
 from ultralytics import YOLO
@@ -13,18 +9,17 @@ from ultralytics import YOLO
 app = FastAPI()
 
 # Pydantic model to define input format
-class ImageBase64Input(BaseModel):
+class ImageBase64Input(BaseModel):  
     image_base64: str
 
 # Load YOLOv8 model
-# model = load_model("/Users/aidanamoldazaiym/Downloads/crop_segment.pt")
-model = YOLO("/Users/aidanamoldazaiym/Downloads/crop_segment.pt")  # Replace with your model's path
+model = YOLO("crop_segment.pt")  # Replace with your model's path
 
 
-# API endpoint to process the image and return the output
 @app.post("/predict/")
 async def predict(input: ImageBase64Input):
     try:
+        bounding_boxes = []
         # Convert base64 image to PIL Image
         image_data = base64.b64decode(input.image_base64)
         # Convert bytes to a NumPy array
@@ -36,21 +31,27 @@ async def predict(input: ImageBase64Input):
         results = model(image, task='segment',save=True) 
         # Iterate through results for each image
         for idx, result in enumerate(results):
-            print(f"Image {idx + 1}:")
-            
             # Access segmentation masks
             if result.masks is not None:
+              
                 for i, polygon in enumerate(result.masks.xy):
-                    print(f"Mask {i} coordinates for Image {idx + 1}: {polygon}")
-        # Process image with YOLOv8 model
-        # result = process_image(model, image)
-
-        # Convert output to base64 for return
-        # output_image = result[0]  # Assuming the result has the image with segmentation overlay
-        # buffered = BytesIO()
-        # output_image.save(buffered, format="PNG")
-        # output_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-        return {"segmented_image": 'akefjnkj'}
+                    # Extract the x and y coordinates
+                    x_coords = polygon[0]
+                    y_coords = polygon[1]
+                    
+                    top_left = (float(min(x_coords)), float(min(y_coords)))
+                    top_right = (float(max(x_coords)), float(min(y_coords)))
+                    bottom_left = (float(min(x_coords)), float(max(y_coords)))
+                    bottom_right = (float(max(x_coords)), float(max(y_coords)))
+                
+                    # Append the bounding box to the list
+                    bounding_boxes.append((
+                            top_left,
+                            top_right,
+                            bottom_left,
+                            bottom_right
+                                  )
+                            )
+        return {"segmented_image_coordinates": bounding_boxes}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
